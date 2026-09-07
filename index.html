@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Containment — a bouncing-ball incremental</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --void: #0A0E1A;
+    --void-2: #0F1524;
+    --line: #2A3550;
+    --panel: rgba(18, 24, 40, 0.72);
+    --panel-border: rgba(255,255,255,0.08);
+    --gold: #F5C24C;
+    --text: #E7ECF7;
+    --text-dim: #8C97B8;
+    --teal: #5EEAD4;
+    --coral: #FB7185;
+    --violet: #A78BFA;
+    --amber: #FBBF24;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: radial-gradient(120% 120% at 50% 0%, var(--void-2) 0%, var(--void) 60%);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+  }
+  .app{
+    display:flex;
+    flex-direction: row;
+    height:100vh;
+    width:100vw;
+  }
+  .stage{
+    flex: 1 1 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    min-width:0;
+  }
+  canvas{
+    display:block;
+    touch-action:none;
+  }
+  .readout{
+    position:absolute;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align:center;
+    pointer-events:none;
+  }
+  .readout .label{
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+  }
+  .readout .value{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--gold);
+    text-shadow: 0 0 24px rgba(245,194,76,0.35);
+    font-variant-numeric: tabular-nums;
+  }
+  .panel{
+    flex: 0 0 300px;
+    background: var(--panel);
+    border-left: 1px solid var(--panel-border);
+    backdrop-filter: blur(10px);
+    padding: 28px 22px;
+    display:flex;
+    flex-direction:column;
+    gap: 22px;
+    overflow-y:auto;
+  }
+  .panel h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    margin: 0;
+    line-height:1.3;
+  }
+  .panel .sub{
+    font-size: 12.5px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+  .stat-row{
+    display:flex;
+    justify-content:space-between;
+    font-size: 13px;
+    color: var(--text-dim);
+    padding: 3px 0;
+  }
+  .stat-row span:last-child{
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .section-title{
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    border-top: 1px solid var(--panel-border);
+    padding-top: 16px;
+    margin-top: -4px;
+  }
+  details.tuning{
+    border-top: 1px solid var(--panel-border);
+    padding-top: 16px;
+    margin-top: -4px;
+  }
+  details.tuning summary{
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    cursor: pointer;
+    list-style: none;
+  }
+  details.tuning summary::-webkit-details-marker{ display:none; }
+  details.tuning summary::before{
+    content: '▸ ';
+  }
+  details.tuning[open] summary::before{
+    content: '▾ ';
+  }
+  .slider-row{
+    margin-top: 14px;
+  }
+  .slider-row .slider-label{
+    display:flex;
+    justify-content:space-between;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+  }
+  .slider-row .slider-label span:last-child{
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .slider-row input[type="range"]{
+    width: 100%;
+    accent-color: var(--teal);
+  }
+  .tune-row{
+    margin-top: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+  }
+  .tune-row .tune-label{
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .tune-row .tune-controls{
+    display:flex;
+    align-items:center;
+    gap: 6px;
+  }
+  .tune-row .tune-val{
+    min-width: 46px;
+    text-align:center;
+    font-size: 12.5px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .tune-btn{
+    width: 24px;
+    height: 24px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    font-size: 15px;
+    line-height:1;
+    cursor: pointer;
+    padding:0;
+  }
+  .tune-btn:hover:not(:disabled){
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.22);
+  }
+  .tune-btn:disabled{
+    opacity: 0.3;
+    cursor: default;
+  }
+  .shape-btn{
+    padding: 7px 11px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    font-family:'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .shape-btn.active{
+    border-color: var(--teal);
+    color: var(--text);
+    background: rgba(94,234,212,0.08);
+  }
+  .shape-btn:hover:not(:disabled):not(.active){
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.2);
+  }
+  .shape-btn:disabled{
+    opacity: 0.35;
+    cursor: default;
+  }
+  .reset-btn{
+    margin-top: 14px;
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    font-family:'Inter', sans-serif;
+    font-size: 12px;
+    padding: 8px;
+    cursor: pointer;
+  }
+  .reset-btn:hover{
+    color: var(--text);
+    border-color: rgba(255,255,255,0.18);
+  }
+  .fill-note{
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .fill-bar-track{
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    margin-top: 6px;
+  }
+  .fill-bar{
+    height: 100%;
+    background: linear-gradient(90deg, var(--teal), var(--coral));
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  .overlay{
+    position:absolute;
+    inset:0;
+    background: rgba(6,8,16,0.86);
+    backdrop-filter: blur(6px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity 0.4s ease;
+  }
+  .overlay.show{
+    opacity:1;
+    pointer-events:all;
+  }
+  .overlay-card{
+    max-width: 380px;
+    padding: 32px;
+    text-align:center;
+  }
+  .overlay-card h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 26px;
+    margin: 0 0 6px;
+  }
+  .overlay-card p{
+    color: var(--text-dim);
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin: 0 0 24px;
+  }
+  .choice-row{
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+  .choice-btn{
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    font-family:'Inter', sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    padding: 13px 16px;
+    cursor:pointer;
+    text-align:left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .choice-btn:hover{
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(255,255,255,0.22);
+  }
+  .choice-btn .t{ font-weight:600; }
+  .choice-btn .d{ display:block; color: var(--text-dim); font-size:11.5px; margin-top:2px; }
+
+  @media (max-width: 760px){
+    .app{ flex-direction: column-reverse; }
+    .panel{
+      flex: 0 0 auto;
+      max-height: 42vh;
+      border-left:none;
+      border-top: 1px solid var(--panel-border);
+    }
+    .stage{ flex: 1 1 auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <div class="readout">
+      <div class="label">MONEY</div>
+      <div class="value" id="money">$0</div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="overlay-card">
+        <h2>Circle's full</h2>
+        <p class="sub" style="margin-bottom:18px;">Round complete. Here's how it went.</p>
+        <div class="stat-row"><span>Money earned</span><span id="ov-money">$0</span></div>
+        <div class="stat-row"><span>Time to first collision</span><span id="ov-first">—</span></div>
+        <div class="stat-row"><span>Time to win</span><span id="ov-total">—</span></div>
+        <div class="stat-row" style="margin-top:8px;"><span>Point earned</span><span id="ov-point" style="color:var(--teal);">+1</span></div>
+        <p class="sub" style="margin:10px 0 0; font-size:12px;">Spend it in the tuning panel before you play again.</p>
+        <button class="choice-btn" id="play-again" style="margin-top:18px;">Play again</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div>
+      <h1>Containment</h1>
+      <div class="sub">Two balls bounce in a circle. Every collision spawns a new one. Every wall hit pays out. Fill the circle to win.</div>
+      <label style="display:flex; align-items:center; gap:7px; margin-top:12px; font-size:11.5px; color:var(--text-dim); cursor:pointer;">
+        <input type="checkbox" id="admin-mode" style="accent-color:var(--coral); width:14px; height:14px;">
+        Admin mode — free, live tweaks during runs
+      </label>
+    </div>
+
+    <div>
+      <div class="stat-row"><span>Balls</span><span id="stat-balls">2</span></div>
+      <div class="stat-row"><span>Wall bounces</span><span id="stat-bounces">0</span></div>
+      <div class="stat-row"><span>Run</span><span id="stat-run">1</span></div>
+      <div class="fill-note">Circle capacity <span id="fill-pct">0%</span></div>
+      <div class="fill-bar-track"><div class="fill-bar" id="fill-bar"></div></div>
+    </div>
+
+    <details class="tuning" open>
+      <summary>TUNING — <span id="points-readout">0</span> pt<span id="points-plural">s</span> to spend</summary>
+      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Each step costs 1 point. Only spendable between rounds — win a round to earn one.</p>
+      <div id="tuning-rows"></div>
+      <button class="reset-btn" id="reset-tuning">Reset to defaults</button>
+    </details>
+
+    <details class="tuning" open>
+      <summary>CONTAINER SHAPE</summary>
+      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock the next shape for 1 point. Switching between unlocked shapes is free, but only between rounds.</p>
+      <div id="shape-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </details>
+
+    <details class="tuning" open>
+      <summary>EFFECTS</summary>
+      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock a visual effect for 1 point, then flip it on or off anytime.</p>
+      <div id="effect-rows"></div>
+    </details>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const stage = document.querySelector('.stage');
+  const moneyEl = document.getElementById('money');
+  const statBalls = document.getElementById('stat-balls');
+  const statBounces = document.getElementById('stat-bounces');
+  const statRun = document.getElementById('stat-run');
+  const fillPct = document.getElementById('fill-pct');
+  const fillBar = document.getElementById('fill-bar');
+  const overlay = document.getElementById('overlay');
+  const ovMoney = document.getElementById('ov-money');
+  const ovFirst = document.getElementById('ov-first');
+  const ovTotal = document.getElementById('ov-total');
+
+  const tuningRowsEl = document.getElementById('tuning-rows');
+  const pointsReadout = document.getElementById('points-readout');
+  const pointsPlural = document.getElementById('points-plural');
+
+  const DEFAULT_TUNING = { gravity: 0.39, drag: 0.004, bounce: 1.6, maxSpeed: 6, ballSize: 5 };
+
+  const TUNING_DEFS = [
+    { key:'gravity',  label:'Gravity',            min:-0.4, max:0.6,  step:0.05,  fmt:v=>v.toFixed(2) },
+    { key:'drag',     label:'Atmosphere drag',    min:0,    max:0.01, step:0.001, fmt:v=>v.toFixed(3) },
+    { key:'bounce',   label:'Wall bounciness',    min:1,    max:1.8,  step:0.05,  fmt:v=>v.toFixed(2) },
+    { key:'maxSpeed', label:'Max speed cap',      min:3,    max:24,   step:1,     fmt:v=>v.toFixed(0) },
+    { key:'ballSize', label:'Ball size',          min:3,    max:20,   step:1,     fmt:v=>v.toFixed(0) },
+  ];
+
+  // settings persist across rounds and are only changed by spending points between rounds
+  let settings = Object.assign({}, DEFAULT_TUNING);
+  let points = 0;
+  let pointsSpentOnTuning = 0; // tracked so "Reset to defaults" can refund it
+
+  function clampStep(v, def){
+    const stepped = Math.round(v / def.step) * def.step;
+    const fixed = parseFloat(stepped.toFixed(6));
+    return Math.min(def.max, Math.max(def.min, fixed));
+  }
+
+  let adminMode = false;
+
+  function tuningUnlocked(){ return adminMode || !running; }
+
+  function applyLiveSetting(key, value){
+    switch(key){
+      case 'gravity': vars.gravity = value; break;
+      case 'drag': vars.drag = value; break;
+      case 'bounce': WALL_BOUNCE_GAIN = value; break;
+      case 'maxSpeed': MAX_SPEED_BASE = value; break;
+      case 'ballSize': {
+        const ratio = value / ballRadiusBase;
+        balls.forEach(b => b.r *= ratio);
+        ballRadiusBase = value;
+        break;
+      }
+    }
+  }
+
+  function renderTuning(){
+    pointsReadout.textContent = points;
+    pointsPlural.textContent = points === 1 ? '' : 's';
+    tuningRowsEl.innerHTML = '';
+    TUNING_DEFS.forEach(def => {
+      const val = settings[def.key];
+      const row = document.createElement('div');
+      row.className = 'tune-row';
+      const gateOpen = tuningUnlocked() && (adminMode || points > 0);
+      const canDown = gateOpen && val > def.min;
+      const canUp = gateOpen && val < def.max;
+      row.innerHTML = `
+        <span class="tune-label">${def.label}</span>
+        <span class="tune-controls">
+          <button class="tune-btn" data-key="${def.key}" data-dir="-1" ${canDown ? '' : 'disabled'}>−</button>
+          <span class="tune-val">${def.fmt(val)}</span>
+          <button class="tune-btn" data-key="${def.key}" data-dir="1" ${canUp ? '' : 'disabled'}>+</button>
+        </span>`;
+      tuningRowsEl.appendChild(row);
+    });
+    tuningRowsEl.querySelectorAll('.tune-btn').forEach(btn => {
+      btn.onclick = () => {
+        if(!tuningUnlocked()) return;
+        if(!adminMode && points <= 0) return;
+        const def = TUNING_DEFS.find(d => d.key === btn.dataset.key);
+        const dir = parseInt(btn.dataset.dir, 10);
+        const next = clampStep(settings[def.key] + dir * def.step, def);
+        if(next === settings[def.key]) return; // already at bound
+        settings[def.key] = next;
+        if(!adminMode){
+          points -= 1;
+          pointsSpentOnTuning += 1;
+        }
+        applyLiveSetting(def.key, next);
+        renderTuning();
+      };
+    });
+  }
+
+  const PALETTE = ['#5EEAD4', '#FB7185', '#A78BFA', '#FBBF24', '#60A5FA', '#F472B6'];
+
+  // ---------- container shapes ----------
+  const CONTAINER_SHAPES = [
+    { sides: 0, name: 'Circle' },
+    { sides: 3, name: 'Triangle' },
+    { sides: 4, name: 'Square' },
+    { sides: 5, name: 'Pentagon' },
+    { sides: 6, name: 'Hexagon' },
+    { sides: 7, name: 'Heptagon' },
+    { sides: 8, name: 'Octagon' },
+  ];
+  let unlockedUpTo = 0;   // index into CONTAINER_SHAPES; 0 = only Circle unlocked
+  let activeShapeIndex = 0;
+
+  function currentShape(){ return CONTAINER_SHAPES[activeShapeIndex]; }
+
+  // regular polygon inscribed in the same circumradius R, vertex pointing up
+  function polygonVertices(){
+    const shape = currentShape();
+    if(shape.sides === 0) return null;
+    const verts = [];
+    const offset = -Math.PI/2;
+    for(let i=0;i<shape.sides;i++){
+      const ang = offset + (Math.PI*2/shape.sides)*i;
+      verts.push({ x: cx + Math.cos(ang)*R, y: cy + Math.sin(ang)*R });
+    }
+    return verts;
+  }
+
+  // edges as {nx,ny,c} where nx,ny is the OUTWARD unit normal and dot(P,n)-c
+  // is positive outside the polygon, negative inside (same convention the
+  // circle wall-check already uses: nx,ny = outward direction at contact)
+  function polygonEdges(){
+    const verts = polygonVertices();
+    if(!verts) return null;
+    const edges = [];
+    for(let i=0;i<verts.length;i++){
+      const v1 = verts[i], v2 = verts[(i+1)%verts.length];
+      let nx = -(v2.y-v1.y), ny = (v2.x-v1.x);
+      const len = Math.sqrt(nx*nx+ny*ny) || 1;
+      nx/=len; ny/=len;
+      const midx=(v1.x+v2.x)/2, midy=(v1.y+v2.y)/2;
+      if(nx*(midx-cx)+ny*(midy-cy) < 0){ nx=-nx; ny=-ny; } // ensure outward
+      edges.push({ nx, ny, c: nx*v1.x+ny*v1.y });
+    }
+    return edges;
+  }
+
+  // furthest-violated edge for point (px,py): s>0 means outside that edge's line
+  function maxEdgeSupport(edges, px, py){
+    let maxS = -Infinity, idx = -1;
+    for(let i=0;i<edges.length;i++){
+      const s = edges[i].nx*px + edges[i].ny*py - edges[i].c;
+      if(s > maxS){ maxS = s; idx = i; }
+    }
+    return { maxS, idx };
+  }
+
+  function polygonArea(shape){
+    if(shape.sides === 0) return Math.PI*R*R;
+    return 0.5 * shape.sides * R*R * Math.sin(2*Math.PI/shape.sides);
+  }
+
+  function renderShapes(){
+    const rows = document.getElementById('shape-rows');
+    rows.innerHTML = '';
+    CONTAINER_SHAPES.forEach((shape, i) => {
+      const btn = document.createElement('button');
+      const isUnlocked = i <= unlockedUpTo || adminMode;
+      if(isUnlocked){
+        btn.className = 'shape-btn' + (i === activeShapeIndex ? ' active' : '');
+        btn.textContent = shape.name;
+        btn.disabled = (running && !adminMode) || i === activeShapeIndex;
+        btn.onclick = () => {
+          if(running && !adminMode) return;
+          activeShapeIndex = i;
+          renderShapes();
+        };
+      } else if(i === unlockedUpTo + 1){
+        btn.className = 'shape-btn';
+        btn.textContent = shape.name + ' — 1 pt';
+        btn.disabled = running || points <= 0;
+        btn.onclick = () => {
+          if(running || points <= 0) return;
+          points -= 1;
+          unlockedUpTo = i;
+          activeShapeIndex = i;
+          renderShapes();
+          renderTuning();
+        };
+      } else {
+        btn.className = 'shape-btn';
+        btn.textContent = shape.name;
+        btn.disabled = true;
+      }
+      rows.appendChild(btn);
+    });
+  }
+
+  // ---------- unlockable visual effects ----------
+  const EFFECT_DEFS = [
+    { key:'speedColor', name:'Velocity color',      unlocked:false, enabled:false },
+    { key:'trails',     name:'Ball trails',         unlocked:false, enabled:false },
+    { key:'explosions', name:'Collision particles', unlocked:false, enabled:false },
+  ];
+
+  function effectOn(key){
+    const def = EFFECT_DEFS.find(d => d.key === key);
+    return def.enabled && (def.unlocked || adminMode);
+  }
+
+  function renderEffects(){
+    const rows = document.getElementById('effect-rows');
+    rows.innerHTML = '';
+    EFFECT_DEFS.forEach(def => {
+      const row = document.createElement('div');
+      row.className = 'tune-row';
+      const available = def.unlocked || adminMode;
+      if(available){
+        row.innerHTML = `
+          <span class="tune-label">${def.name}</span>
+          <label style="display:flex;align-items:center;cursor:pointer;">
+            <input type="checkbox" data-key="${def.key}" ${def.enabled ? 'checked' : ''} style="accent-color:var(--teal); width:16px; height:16px;">
+          </label>`;
+      } else {
+        const canUnlock = !running && points > 0;
+        row.innerHTML = `
+          <span class="tune-label">${def.name}</span>
+          <button class="tune-btn" data-unlock="${def.key}" style="width:auto; padding:0 10px;" ${canUnlock ? '' : 'disabled'}>Unlock — 1 pt</button>`;
+      }
+      rows.appendChild(row);
+    });
+    rows.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.onchange = () => {
+        const def = EFFECT_DEFS.find(d => d.key === cb.dataset.key);
+        def.enabled = cb.checked;
+      };
+    });
+    rows.querySelectorAll('button[data-unlock]').forEach(btn => {
+      btn.onclick = () => {
+        if(running || points <= 0) return;
+        const def = EFFECT_DEFS.find(d => d.key === btn.dataset.unlock);
+        points -= 1;
+        def.unlocked = true;
+        def.enabled = true;
+        renderEffects();
+        renderTuning();
+      };
+    });
+  }
+
+  function speedToColor(speed, maxSpeed){
+    const t = Math.max(0, Math.min(1, speed / Math.max(maxSpeed, 0.001)));
+    const lerp = (a,b,k) => a + (b-a)*k;
+    let r,g,b;
+    if(t < 0.5){
+      const k = t/0.5;
+      r = lerp(94,251,k); g = lerp(234,191,k); b = lerp(212,36,k);
+    } else {
+      const k = (t-0.5)/0.5;
+      r = lerp(251,251,k); g = lerp(191,113,k); b = lerp(36,133,k);
+    }
+    return `rgb(${r|0},${g|0},${b|0})`;
+  }
+
+  let particles = [];
+  function spawnExplosion(x, y, colorA, colorB){
+    const count = 12;
+    for(let i=0;i<count;i++){
+      const ang = Math.random()*Math.PI*2;
+      const spd = rand(1, 4);
+      particles.push({
+        x, y,
+        vx: Math.cos(ang)*spd,
+        vy: Math.sin(ang)*spd,
+        life: 1,
+        size: rand(1.5, 3),
+        color: i % 2 === 0 ? colorA : colorB,
+      });
+    }
+  }
+
+  // ---------- persistent progression ----------
+  let runNumber = 1;
+  const STARTING_BALLS = 2;
+
+  // ---------- run state ----------
+  let money = 0;
+  let bounces = 0;
+  let balls = [];
+  let running = true;
+  let ballRadiusBase = 5;
+  let roundStartTime = 0;
+  let firstHitElapsed = null;
+
+  // Physics run in a FIXED logical coordinate space, independent of the
+  // actual on-screen pixel size. Resizing the window only changes how this
+  // logical space is scaled onto the canvas for display (see renderScale) —
+  // it can never change ball size relative to the circle, which is what
+  // made resizing an exploit before.
+  const LOGICAL_SIZE = 600;
+  const LOGICAL_MARGIN = 14;
+  const cx = LOGICAL_SIZE/2;
+  const cy = LOGICAL_SIZE/2;
+  const R = LOGICAL_SIZE/2 - LOGICAL_MARGIN;
+  let renderScale = 1;
+
+  let vars;
+
+  function freshVars(){
+    return {
+      speedMult: 1,
+      sizeMult: 1,
+      gravity: settings.gravity,
+      drag: settings.drag,
+    };
+  }
+
+  function resizeCanvas(){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    const size = Math.max(280, Math.min(w, h) - 60);
+    canvas.width = size; canvas.height = size;
+    canvas.style.width = size+'px'; canvas.style.height = size+'px';
+    renderScale = size / LOGICAL_SIZE;
+  }
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+
+  function spawnBallAt(x, y, vAngle, opts){
+    opts = opts || {};
+    const r = ballRadiusBase * vars.sizeMult;
+    const speed = rand(1.6, 2.6) * vars.speedMult;
+    balls.push({
+      x, y,
+      vx: Math.cos(vAngle)*speed,
+      vy: Math.sin(vAngle)*speed,
+      r,
+      color: PALETTE[balls.length % PALETTE.length],
+      heavy: !!opts.heavy,
+      twinOf: opts.twinOf !== undefined ? opts.twinOf : null,
+    });
+    return balls.length - 1;
+  }
+
+  function findSpawnPoint(r){
+    const maxTries = 260;
+    const edges = polygonEdges();
+    for(let i=0;i<maxTries;i++){
+      const ang = Math.random()*Math.PI*2;
+      const dist = Math.sqrt(Math.random()) * (R - r - 2);
+      const x = cx + Math.cos(ang)*dist;
+      const y = cy + Math.sin(ang)*dist;
+      if(edges){
+        const { maxS } = maxEdgeSupport(edges, x, y);
+        if(maxS > -r) continue; // too close to (or outside) the polygon boundary
+      }
+      let ok = true;
+      for(const b of balls){
+        const dx = b.x-x, dy = b.y-y;
+        if(Math.sqrt(dx*dx+dy*dy) < b.r + r + 3){ ok = false; break; }
+      }
+      if(ok) return {x,y};
+    }
+    return null;
+  }
+
+  function trySpawnAfterCollision(){
+    const r = ballRadiusBase * vars.sizeMult;
+    const pt = findSpawnPoint(r);
+    if(!pt){
+      triggerWin();
+      return;
+    }
+    const ang = Math.random()*Math.PI*2;
+    spawnBallAt(pt.x, pt.y, ang);
+  }
+
+  function initRun(){
+    WALL_BOUNCE_GAIN = settings.bounce;
+    MAX_SPEED_BASE = settings.maxSpeed;
+    ballRadiusBase = settings.ballSize;
+    vars = freshVars();
+    money = 0; bounces = 0; balls = []; particles = [];
+    for(let i=0;i<STARTING_BALLS;i++){
+      const ang = (Math.PI*2/STARTING_BALLS)*i + rand(-0.3,0.3);
+      const dist = R*0.3;
+      spawnBallAt(cx+Math.cos(ang)*dist, cy+Math.sin(ang)*dist, rand(0,Math.PI*2));
+    }
+    running = true;
+    roundStartTime = performance.now();
+    firstHitElapsed = null;
+    overlay.classList.remove('show');
+    updateHud();
+    renderTuning();
+    renderShapes();
+    renderEffects();
+  }
+
+  function formatTime(ms){
+    if(ms === null || ms === undefined) return '—';
+    return (ms/1000).toFixed(1) + 's';
+  }
+
+  function triggerWin(){
+    running = false;
+    const totalElapsed = performance.now() - roundStartTime;
+    ovMoney.textContent = '$' + Math.floor(money).toLocaleString();
+    ovFirst.textContent = formatTime(firstHitElapsed);
+    ovTotal.textContent = formatTime(totalElapsed);
+    points += 1;
+    overlay.classList.add('show');
+    renderTuning();
+    renderShapes();
+    renderEffects();
+  }
+
+  let WALL_BOUNCE_GAIN = 1.6; // walls add a bit of energy so balls don't pool at the bottom under gravity
+  let MAX_SPEED_BASE = 6;
+  function reflectVelocity(b, nx, ny){
+    const dot = b.vx*nx + b.vy*ny;
+    b.vx -= 2*dot*nx;
+    b.vy -= 2*dot*ny;
+    // a little randomness so trajectories stay unpredictable
+    const jitter = rand(-0.28, 0.28);
+    const cosA = Math.cos(jitter), sinA = Math.sin(jitter);
+    let vx = b.vx*cosA - b.vy*sinA;
+    let vy = b.vx*sinA + b.vy*cosA;
+    vx *= WALL_BOUNCE_GAIN;
+    vy *= WALL_BOUNCE_GAIN;
+    const maxSpeed = MAX_SPEED_BASE * vars.speedMult;
+    const speed = Math.sqrt(vx*vx + vy*vy);
+    if(speed > maxSpeed){
+      const s = maxSpeed / speed;
+      vx *= s; vy *= s;
+    }
+    b.vx = vx; b.vy = vy;
+  }
+
+  function step(){
+    if(!running) return;
+
+    const wallEdges = polygonEdges(); // null when the active shape is the circle
+
+    // physics for non-twin balls
+    for(let i=0;i<balls.length;i++){
+      const b = balls[i];
+      if(b.twinOf !== null && balls[b.twinOf] && balls[b.twinOf].twinOf === i && i > b.twinOf) continue; // secondary of pair, derived below
+      b.vy += vars.gravity * 0.05;
+      b.vx *= (1 - vars.drag);
+      b.vy *= (1 - vars.drag);
+
+      // heavy-ball attraction
+      if(!b.heavy){
+        for(const h of balls){
+          if(!h.heavy || h === b) continue;
+          const dx = h.x - b.x, dy = h.y - b.y;
+          const d2 = dx*dx+dy*dy;
+          const d = Math.sqrt(d2) || 1;
+          if(d < R*0.9){
+            const pull = 0.0025 / Math.max(d2, 400);
+            b.vx += dx/d * pull * 4000;
+            b.vy += dy/d * pull * 4000;
+          }
+        }
+      }
+
+      b.x += b.vx;
+      b.y += b.vy;
+
+      // wall collision
+      if(wallEdges){
+        const { maxS, idx } = maxEdgeSupport(wallEdges, b.x, b.y);
+        if(maxS + b.r > 0){
+          const e = wallEdges[idx];
+          const penetration = maxS + b.r;
+          b.x -= e.nx*penetration;
+          b.y -= e.ny*penetration;
+          reflectVelocity(b, e.nx, e.ny);
+          money += 1;
+          bounces += 1;
+        }
+      } else {
+        const dx = b.x-cx, dy = b.y-cy;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        if(dist + b.r > R){
+          const nx = dx/dist, ny = dy/dist;
+          b.x = cx + nx*(R-b.r);
+          b.y = cy + ny*(R-b.r);
+          reflectVelocity(b, nx, ny);
+          money += 1;
+          bounces += 1;
+        }
+      }
+    }
+
+    // sync entangled twins as point-reflections through center
+    for(let i=0;i<balls.length;i++){
+      const b = balls[i];
+      if(b.twinOf !== null && balls[b.twinOf] && balls[b.twinOf].twinOf === i && i > b.twinOf){
+        const primary = balls[b.twinOf];
+        b.x = 2*cx - primary.x;
+        b.y = 2*cy - primary.y;
+        b.vx = -primary.vx;
+        b.vy = -primary.vy;
+      }
+    }
+
+    // ball-ball collisions
+    outer:
+    for(let i=0;i<balls.length;i++){
+      for(let j=i+1;j<balls.length;j++){
+        const a = balls[i], b = balls[j];
+        const dx = b.x-a.x, dy = b.y-a.y;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        const minDist = a.r+b.r;
+        if(dist > 0 && dist < minDist){
+          const nx = dx/dist, ny = dy/dist;
+          const overlap = (minDist - dist)/2;
+          a.x -= nx*overlap; a.y -= ny*overlap;
+          b.x += nx*overlap; b.y += ny*overlap;
+
+          const relVx = b.vx-a.vx, relVy = b.vy-a.vy;
+          const rel = relVx*nx + relVy*ny;
+          if(rel < 0){
+            a.vx += rel*nx; a.vy += rel*ny;
+            b.vx -= rel*nx; b.vy -= rel*ny;
+          }
+          if(firstHitElapsed === null) firstHitElapsed = performance.now() - roundStartTime;
+          if(effectOn('explosions')) spawnExplosion((a.x+b.x)/2, (a.y+b.y)/2, a.color, b.color);
+          trySpawnAfterCollision();
+          if(!running) break outer;
+        }
+      }
+    }
+
+    // particles (always advance so they can fade out even if disabled mid-run)
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.94; p.vy *= 0.94;
+      p.life -= 0.035;
+      if(p.life <= 0) particles.splice(i,1);
+    }
+
+    updateHud();
+  }
+
+  function updateHud(){
+    moneyEl.textContent = '$' + Math.floor(money).toLocaleString();
+    statBalls.textContent = balls.length;
+    statBounces.textContent = bounces;
+    statRun.textContent = runNumber;
+    // fill estimate: total ball area / active-shape area
+    const ballArea = balls.reduce((s,b)=> s + Math.PI*b.r*b.r, 0);
+    const shapeArea = polygonArea(currentShape());
+    const pct = Math.min(100, Math.round((ballArea/shapeArea)*100));
+    fillPct.textContent = pct + '%';
+    fillBar.style.width = pct + '%';
+  }
+
+  function draw(){
+    ctx.setTransform(1,0,0,1,0,0);
+    if(effectOn('trails')){
+      ctx.fillStyle = 'rgba(10,14,26,0.22)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    } else {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+    ctx.setTransform(renderScale,0,0,renderScale,0,0); // logical units -> current pixel size
+
+    // boundary
+    const verts = polygonVertices();
+    ctx.beginPath();
+    if(verts){
+      ctx.moveTo(verts[0].x, verts[0].y);
+      for(let i=1;i<verts.length;i++) ctx.lineTo(verts[i].x, verts[i].y);
+      ctx.closePath();
+    } else {
+      ctx.arc(cx,cy,R,0,Math.PI*2);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // entangle links
+    for(let i=0;i<balls.length;i++){
+      const b = balls[i];
+      if(b.twinOf !== null && b.twinOf > i){
+        const t = balls[b.twinOf];
+        ctx.beginPath();
+        ctx.moveTo(b.x,b.y);
+        ctx.lineTo(t.x,t.y);
+        ctx.strokeStyle = 'rgba(167,139,250,0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    // balls
+    const useSpeedColor = effectOn('speedColor');
+    const trailsActive = effectOn('trails'); // glow halos don't fade cleanly against the trail overlay, so drop them while trails are on
+    for(const b of balls){
+      const fill = useSpeedColor
+        ? speedToColor(Math.sqrt(b.vx*b.vx+b.vy*b.vy), MAX_SPEED_BASE)
+        : b.color;
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+      ctx.fillStyle = fill;
+      ctx.shadowColor = fill;
+      ctx.shadowBlur = trailsActive ? 0 : (b.heavy ? 22 : 10);
+      ctx.fill();
+      if(b.heavy){
+        ctx.beginPath();
+        ctx.arc(b.x,b.y,b.r+4,0,Math.PI*2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+      }
+    }
+    ctx.shadowBlur = 0;
+
+    // particles
+    for(const p of particles){
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+
+  function loop(){
+    step();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  document.getElementById('play-again').onclick = () => {
+    runNumber += 1;
+    resizeCanvas();
+    initRun();
+  };
+
+  document.getElementById('reset-tuning').onclick = () => {
+    if(running && !adminMode) return;
+    settings = Object.assign({}, DEFAULT_TUNING);
+    points += pointsSpentOnTuning;
+    pointsSpentOnTuning = 0;
+    Object.keys(settings).forEach(k => applyLiveSetting(k, settings[k]));
+    renderTuning();
+  };
+
+  document.getElementById('admin-mode').onchange = (e) => {
+    adminMode = e.target.checked;
+    renderTuning();
+    renderShapes();
+    renderEffects();
+  };
+
+  window.addEventListener('resize', () => {
+    resizeCanvas(); // only updates pixel size / renderScale — logical R and ball sizes never change
+  });
+
+  resizeCanvas();
+  initRun();
+  loop();
+})();
+</script>
+</body>
+</html>
