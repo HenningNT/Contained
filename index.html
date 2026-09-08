@@ -370,6 +370,12 @@
     </details>
 
     <details class="tuning" open>
+      <summary>CHARGE</summary>
+      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Same-colour balls repel, opposite colours attract. A collision flips one ball's charge so they repel afterward. The range stays local even at High.</p>
+      <div id="charge-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </details>
+
+    <details class="tuning" open>
       <summary>EFFECTS</summary>
       <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock a visual effect for 1 point, then flip it on or off anytime.</p>
       <div id="effect-rows"></div>
@@ -583,6 +589,67 @@
     });
   }
 
+  // ---------- charge (attract/repel by polarity) ----------
+  const CHARGE_COLOR_POS = '#5EEAD4'; // teal
+  const CHARGE_COLOR_NEG = '#FB7185'; // coral
+  const CHARGE_RANGE = 40;       // logical units — stays fixed at every level, keeps it "quite local" even at High
+  const CHARGE_DIST_FLOOR2 = 200; // prevents the force from spiking at very close range
+
+  const CHARGE_LEVELS = [
+    { name: 'None',   strength: 0 },
+    { name: 'Low',    strength: 2 },
+    { name: 'Medium', strength: 5 },
+    { name: 'High',   strength: 10 },
+  ];
+  let chargeUnlockedUpTo = 0; // index into CHARGE_LEVELS; 0 = only None unlocked
+  let activeChargeIndex = 0;
+
+  function currentChargeStrength(){ return CHARGE_LEVELS[activeChargeIndex].strength; }
+
+  // the color a ball should actually be drawn/exploded as: charge polarity
+  // color when Charge is active, otherwise its normal spawn-assigned color
+  function identityColor(b){
+    return currentChargeStrength() > 0
+      ? (b.charge > 0 ? CHARGE_COLOR_POS : CHARGE_COLOR_NEG)
+      : b.color;
+  }
+
+  function renderCharge(){
+    const rows = document.getElementById('charge-rows');
+    rows.innerHTML = '';
+    CHARGE_LEVELS.forEach((level, i) => {
+      const btn = document.createElement('button');
+      const isUnlocked = i <= chargeUnlockedUpTo || adminMode;
+      if(isUnlocked){
+        btn.className = 'shape-btn' + (i === activeChargeIndex ? ' active' : '');
+        btn.textContent = level.name;
+        btn.disabled = (running && !adminMode) || i === activeChargeIndex;
+        btn.onclick = () => {
+          if(running && !adminMode) return;
+          activeChargeIndex = i;
+          renderCharge();
+        };
+      } else if(i === chargeUnlockedUpTo + 1){
+        btn.className = 'shape-btn';
+        btn.textContent = level.name + ' — 1 pt';
+        btn.disabled = running || points <= 0;
+        btn.onclick = () => {
+          if(running || points <= 0) return;
+          points -= 1;
+          chargeUnlockedUpTo = i;
+          activeChargeIndex = i;
+          renderCharge();
+          renderTuning();
+        };
+      } else {
+        btn.className = 'shape-btn';
+        btn.textContent = level.name;
+        btn.disabled = true;
+      }
+      rows.appendChild(btn);
+    });
+  }
+
   // ---------- unlockable visual effects ----------
   const EFFECT_DEFS = [
     { key:'speedColor', name:'Velocity color',      unlocked:false, enabled:false },
@@ -782,8 +849,8 @@
       vy: Math.sin(vAngle)*speed,
       r,
       color: PALETTE[balls.length % PALETTE.length],
-      heavy: !!opts.heavy,
       twinOf: opts.twinOf !== undefined ? opts.twinOf : null,
+      charge: Math.random() < 0.5 ? 1 : -1,
     });
     return balls.length - 1;
   }
@@ -841,6 +908,7 @@
     updateHud();
     renderTuning();
     renderShapes();
+    renderCharge();
     renderEffects();
   }
 
@@ -860,6 +928,7 @@
     overlay.classList.add('show');
     renderTuning();
     renderShapes();
+    renderCharge();
     renderEffects();
   }
 
@@ -897,21 +966,6 @@
       b.vy += vars.gravity * 0.05;
       b.vx *= (1 - vars.drag);
       b.vy *= (1 - vars.drag);
-
-      // heavy-ball attraction
-      if(!b.heavy){
-        for(const h of balls){
-          if(!h.heavy || h === b) continue;
-          const dx = h.x - b.x, dy = h.y - b.y;
-          const d2 = dx*dx+dy*dy;
-          const d = Math.sqrt(d2) || 1;
-          if(d < R*0.9){
-            const pull = 0.0025 / Math.max(d2, 400);
-            b.vx += dx/d * pull * 4000;
-            b.vy += dy/d * pull * 4000;
-          }
-        }
-      }
 
       b.x += b.vx;
       b.y += b.vy;
@@ -954,6 +1008,7 @@
 
     // ball-ball collisions
     const humActive = effectOn('hum');
+    const chargeStrength = currentChargeStrength();
     let humMinGap = Infinity;
     outer:
     for(let i=0;i<balls.length;i++){
@@ -965,6 +1020,14 @@
         if(humActive){
           const gap = dist - minDist;
           if(gap < humMinGap) humMinGap = gap;
+        }
+        if(chargeStrength > 0 && dist > 0 && dist < CHARGE_RANGE){
+          const sign = a.charge === b.charge ? -1 : 1; // +1 attract (opposite), -1 repel (same)
+          const d2 = Math.max(dist*dist, CHARGE_DIST_FLOOR2);
+          const forceMag = (chargeStrength / d2) * sign;
+          const fx = (dx/dist) * forceMag, fy = (dy/dist) * forceMag;
+          a.vx += fx; a.vy += fy;
+          b.vx -= fx; b.vy -= fy;
         }
         if(dist > 0 && dist < minDist){
           const nx = dx/dist, ny = dy/dist;
@@ -979,8 +1042,9 @@
             b.vx -= rel*nx; b.vy -= rel*ny;
           }
           if(firstHitElapsed === null) firstHitElapsed = performance.now() - roundStartTime;
-          if(effectOn('explosions')) spawnExplosion((a.x+b.x)/2, (a.y+b.y)/2, a.color, b.color);
+          if(effectOn('explosions')) spawnExplosion((a.x+b.x)/2, (a.y+b.y)/2, identityColor(a), identityColor(b));
           if(effectOn('hum')) playClick();
+          if(chargeStrength > 0) b.charge = a.charge; // equalize so they repel from here on, not re-attract and stick
           trySpawnAfterCollision();
           if(!running) break outer;
         }
@@ -1056,21 +1120,13 @@
     for(const b of balls){
       const fill = useSpeedColor
         ? speedToColor(Math.sqrt(b.vx*b.vx+b.vy*b.vy), MAX_SPEED_BASE)
-        : b.color;
+        : identityColor(b);
       ctx.beginPath();
       ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
       ctx.fillStyle = fill;
       ctx.shadowColor = fill;
-      ctx.shadowBlur = trailsActive ? 0 : (b.heavy ? 22 : 10);
+      ctx.shadowBlur = trailsActive ? 0 : 10;
       ctx.fill();
-      if(b.heavy){
-        ctx.beginPath();
-        ctx.arc(b.x,b.y,b.r+4,0,Math.PI*2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-        ctx.lineWidth = 1.5;
-        ctx.shadowBlur = 0;
-        ctx.stroke();
-      }
     }
     ctx.shadowBlur = 0;
 
@@ -1112,6 +1168,7 @@
     adminMode = e.target.checked;
     renderTuning();
     renderShapes();
+    renderCharge();
     renderEffects();
   };
 
