@@ -610,6 +610,7 @@
     humOsc.connect(humGain);
     humGain.connect(audioCtx.destination);
     humOsc.start();
+    if(audioCtx.state === 'suspended') audioCtx.resume(); // some browsers start a freshly-created context suspended even in a click handler
   }
 
   function muteHum(){
@@ -688,6 +689,7 @@
         points -= 1;
         def.unlocked = true;
         def.enabled = true;
+        if(def.key === 'hum') ensureAudio(); // unlocking auto-enables it, but that skips the checkbox's onchange — start audio here instead
         renderEffects();
         renderTuning();
       };
