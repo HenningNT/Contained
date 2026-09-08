@@ -367,6 +367,7 @@
       <summary>CONTAINER SHAPE</summary>
       <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock the next shape for 1 point. Switching between unlocked shapes is free, but only between rounds.</p>
       <div id="shape-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+      <div id="rotation-row" style="margin-top:12px;"></div>
     </details>
 
     <details class="tuning" open>
@@ -498,12 +499,45 @@
 
   function currentShape(){ return CONTAINER_SHAPES[activeShapeIndex]; }
 
+  // ---------- container rotation ----------
+  let rotationUnlocked = false;
+  let rotationEnabled = false;
+  let containerRotation = 0;
+  const ROTATION_SPEED = 0.0016; // radians per frame — slow
+
+  function renderRotation(){
+    const row = document.getElementById('rotation-row');
+    const available = rotationUnlocked || adminMode;
+    if(available){
+      row.innerHTML = `
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12.5px; color:var(--text-dim);">
+          <input type="checkbox" id="rotation-toggle" ${rotationEnabled ? 'checked' : ''} style="accent-color:var(--teal); width:16px; height:16px;">
+          Rotation — container spins slowly
+        </label>`;
+      document.getElementById('rotation-toggle').onchange = (e) => {
+        rotationEnabled = e.target.checked;
+      };
+    } else {
+      const canUnlock = !running && points > 0;
+      row.innerHTML = `<button class="tune-btn" id="rotation-unlock" style="width:auto; padding:0 10px;" ${canUnlock ? '' : 'disabled'}>Unlock Rotation — 1 pt</button>`;
+      document.getElementById('rotation-unlock').onclick = () => {
+        if(running || points <= 0) return;
+        points -= 1;
+        rotationUnlocked = true;
+        rotationEnabled = true;
+        renderRotation();
+        renderTuning();
+      };
+    }
+  }
+
   // regular polygon inscribed in the same circumradius R, vertex pointing up
+  // (plus containerRotation, which slowly turns it when Rotation is enabled)
   function polygonVertices(){
     const shape = currentShape();
     if(shape.sides === 0) return null;
     const verts = [];
-    const offset = -Math.PI/2;
+    const offset = -Math.PI/2 + containerRotation;
     for(let i=0;i<shape.sides;i++){
       const ang = offset + (Math.PI*2/shape.sides)*i;
       verts.push({ x: cx + Math.cos(ang)*R, y: cy + Math.sin(ang)*R });
@@ -903,12 +937,14 @@
     running = true;
     roundStartTime = performance.now();
     firstHitElapsed = null;
+    containerRotation = 0;
     muteHum();
     overlay.classList.remove('show');
     updateHud();
     renderTuning();
     renderShapes();
     renderCharge();
+    renderRotation();
     renderEffects();
   }
 
@@ -929,6 +965,7 @@
     renderTuning();
     renderShapes();
     renderCharge();
+    renderRotation();
     renderEffects();
   }
 
@@ -957,6 +994,7 @@
   function step(){
     if(!running) return;
 
+    if(rotationEnabled) containerRotation += ROTATION_SPEED;
     const wallEdges = polygonEdges(); // null when the active shape is the circle
 
     // physics for non-twin balls
@@ -1169,6 +1207,7 @@
     renderTuning();
     renderShapes();
     renderCharge();
+    renderRotation();
     renderEffects();
   };
 
