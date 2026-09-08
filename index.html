@@ -588,11 +588,67 @@
     { key:'speedColor', name:'Velocity color',      unlocked:false, enabled:false },
     { key:'trails',     name:'Ball trails',         unlocked:false, enabled:false },
     { key:'explosions', name:'Collision particles', unlocked:false, enabled:false },
+    { key:'hum',        name:'Sound (hum + click)', unlocked:false, enabled:false },
   ];
 
   function effectOn(key){
     const def = EFFECT_DEFS.find(d => d.key === key);
     return def.enabled && (def.unlocked || adminMode);
+  }
+
+  // ---------- proximity hum (Web Audio) ----------
+  let audioCtx = null, humOsc = null, humGain = null;
+
+  function ensureAudio(){
+    if(audioCtx){ if(audioCtx.state === 'suspended') audioCtx.resume(); return; }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    humOsc = audioCtx.createOscillator();
+    humOsc.type = 'sine';
+    humOsc.frequency.value = 90;
+    humGain = audioCtx.createGain();
+    humGain.gain.value = 0;
+    humOsc.connect(humGain);
+    humGain.connect(audioCtx.destination);
+    humOsc.start();
+  }
+
+  function muteHum(){
+    if(humGain && audioCtx) humGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
+  }
+
+  const HUM_RANGE = 60; // logical units of surface-to-surface gap where the hum becomes audible
+
+  function updateHum(minGap){
+    if(!humGain || !audioCtx) return;
+    let closeness = 0;
+    if(minGap < HUM_RANGE){
+      closeness = Math.max(0, Math.min(1, 1 - minGap/HUM_RANGE));
+    }
+    const targetFreq = 90 + closeness*170;   // rises toward a higher pitch as balls close in
+    const targetGain = closeness*closeness*0.18; // squared curve = swells late, falls fast — the "ooOOoohm" shape
+    const now = audioCtx.currentTime;
+    humOsc.frequency.setTargetAtTime(targetFreq, now, 0.08);
+    humGain.gain.setTargetAtTime(targetGain, now, 0.12);
+  }
+
+  function playClick(){
+    if(!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const clickGain = audioCtx.createGain();
+    clickGain.gain.setValueAtTime(0.22, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    clickGain.connect(audioCtx.destination);
+    // two slightly inharmonic partials with a quick downward pitch slide = metallic "tink"
+    [1600, 2350].forEach(freq => {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq*0.6, now + 0.1);
+      osc.connect(clickGain);
+      osc.start(now);
+      osc.stop(now + 0.13);
+      osc.onended = () => osc.disconnect();
+    });
   }
 
   function renderEffects(){
@@ -620,6 +676,9 @@
       cb.onchange = () => {
         const def = EFFECT_DEFS.find(d => d.key === cb.dataset.key);
         def.enabled = cb.checked;
+        if(def.key === 'hum'){
+          if(def.enabled) ensureAudio(); else muteHum();
+        }
       };
     });
     rows.querySelectorAll('button[data-unlock]').forEach(btn => {
@@ -775,6 +834,7 @@
     running = true;
     roundStartTime = performance.now();
     firstHitElapsed = null;
+    muteHum();
     overlay.classList.remove('show');
     updateHud();
     renderTuning();
@@ -794,6 +854,7 @@
     ovFirst.textContent = formatTime(firstHitElapsed);
     ovTotal.textContent = formatTime(totalElapsed);
     points += 1;
+    muteHum();
     overlay.classList.add('show');
     renderTuning();
     renderShapes();
@@ -890,6 +951,8 @@
     }
 
     // ball-ball collisions
+    const humActive = effectOn('hum');
+    let humMinGap = Infinity;
     outer:
     for(let i=0;i<balls.length;i++){
       for(let j=i+1;j<balls.length;j++){
@@ -897,6 +960,10 @@
         const dx = b.x-a.x, dy = b.y-a.y;
         const dist = Math.sqrt(dx*dx+dy*dy);
         const minDist = a.r+b.r;
+        if(humActive){
+          const gap = dist - minDist;
+          if(gap < humMinGap) humMinGap = gap;
+        }
         if(dist > 0 && dist < minDist){
           const nx = dx/dist, ny = dy/dist;
           const overlap = (minDist - dist)/2;
@@ -911,11 +978,13 @@
           }
           if(firstHitElapsed === null) firstHitElapsed = performance.now() - roundStartTime;
           if(effectOn('explosions')) spawnExplosion((a.x+b.x)/2, (a.y+b.y)/2, a.color, b.color);
+          if(effectOn('hum')) playClick();
           trySpawnAfterCollision();
           if(!running) break outer;
         }
       }
     }
+    if(humActive && running) updateHum(humMinGap); // guard: triggerWin() may have just muted this same frame
 
     // particles (always advance so they can fade out even if disabled mid-run)
     for(let i=particles.length-1;i>=0;i--){
