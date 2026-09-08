@@ -321,15 +321,15 @@
 <div class="app">
   <div class="stage">
     <div class="readout">
-      <div class="label">MONEY</div>
-      <div class="value" id="money">$0</div>
+      <div class="label">BOUNCES</div>
+      <div class="value" id="bounce-readout">0</div>
     </div>
     <canvas id="canvas"></canvas>
     <div class="overlay" id="overlay">
       <div class="overlay-card">
         <h2>Circle's full</h2>
         <p class="sub" style="margin-bottom:18px;">Round complete. Here's how it went.</p>
-        <div class="stat-row"><span>Money earned</span><span id="ov-money">$0</span></div>
+        <div class="stat-row"><span>Wall bounces</span><span id="ov-bounces">0</span></div>
         <div class="stat-row"><span>Time to first collision</span><span id="ov-first">—</span></div>
         <div class="stat-row"><span>Time to win</span><span id="ov-total">—</span></div>
         <div class="stat-row" style="margin-top:8px;"><span>Point earned</span><span id="ov-point" style="color:var(--teal);">+1</span></div>
@@ -342,7 +342,7 @@
   <div class="panel">
     <div>
       <h1>Containment</h1>
-      <div class="sub">Two balls bounce in a circle. Every collision spawns a new one. Every wall hit pays out. Fill the circle to win.</div>
+      <div class="sub">Two balls bounce in a circle. Every collision spawns a new one. Every wall hit adds a bounce. Fill the circle to win.</div>
       <label style="display:flex; align-items:center; gap:7px; margin-top:12px; font-size:11.5px; color:var(--text-dim); cursor:pointer;">
         <input type="checkbox" id="admin-mode" style="accent-color:var(--coral); width:14px; height:14px;">
         Admin mode — free, live tweaks during runs
@@ -351,7 +351,6 @@
 
     <div>
       <div class="stat-row"><span>Balls</span><span id="stat-balls">2</span></div>
-      <div class="stat-row"><span>Wall bounces</span><span id="stat-bounces">0</span></div>
       <div class="stat-row"><span>Run</span><span id="stat-run">1</span></div>
       <div class="fill-note">Circle capacity <span id="fill-pct">0%</span></div>
       <div class="fill-bar-track"><div class="fill-bar" id="fill-bar"></div></div>
@@ -383,14 +382,13 @@
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
   const stage = document.querySelector('.stage');
-  const moneyEl = document.getElementById('money');
+  const bounceReadoutEl = document.getElementById('bounce-readout');
   const statBalls = document.getElementById('stat-balls');
-  const statBounces = document.getElementById('stat-bounces');
   const statRun = document.getElementById('stat-run');
   const fillPct = document.getElementById('fill-pct');
   const fillBar = document.getElementById('fill-bar');
   const overlay = document.getElementById('overlay');
-  const ovMoney = document.getElementById('ov-money');
+  const ovBounces = document.getElementById('ov-bounces');
   const ovFirst = document.getElementById('ov-first');
   const ovTotal = document.getElementById('ov-total');
 
@@ -536,9 +534,17 @@
     return { maxS, idx };
   }
 
-  function polygonArea(shape){
-    if(shape.sides === 0) return Math.PI*R*R;
-    return 0.5 * shape.sides * R*R * Math.sin(2*Math.PI/shape.sides);
+  // Average max ball count at jam, per container shape, from an offline
+  // simulation using this exact spawn algorithm (SPAWN_MAX_TRIES, +3 margin,
+  // ball radius 5) — rescaled so Circle matches an observed real value.
+  const BASE_R = 5;
+  const BASE_MAX_BALLS = { 0: 940, 3: 363, 4: 589, 5: 710, 6: 773, 7: 824, 8: 851 };
+
+  function estimatedMaxBalls(){
+    const shape = currentShape();
+    const base = BASE_MAX_BALLS[shape.sides];
+    const r = ballRadiusBase * vars.sizeMult;
+    return Math.max(2, Math.round(base * (BASE_R / r) * (BASE_R / r)));
   }
 
   function renderShapes(){
@@ -665,7 +671,6 @@
   const STARTING_BALLS = 2;
 
   // ---------- run state ----------
-  let money = 0;
   let bounces = 0;
   let balls = [];
   let running = true;
@@ -722,10 +727,11 @@
     return balls.length - 1;
   }
 
+  const SPAWN_MAX_TRIES = 260;
+
   function findSpawnPoint(r){
-    const maxTries = 260;
     const edges = polygonEdges();
-    for(let i=0;i<maxTries;i++){
+    for(let i=0;i<SPAWN_MAX_TRIES;i++){
       const ang = Math.random()*Math.PI*2;
       const dist = Math.sqrt(Math.random()) * (R - r - 2);
       const x = cx + Math.cos(ang)*dist;
@@ -760,7 +766,7 @@
     MAX_SPEED_BASE = settings.maxSpeed;
     ballRadiusBase = settings.ballSize;
     vars = freshVars();
-    money = 0; bounces = 0; balls = []; particles = [];
+    bounces = 0; balls = []; particles = [];
     for(let i=0;i<STARTING_BALLS;i++){
       const ang = (Math.PI*2/STARTING_BALLS)*i + rand(-0.3,0.3);
       const dist = R*0.3;
@@ -784,7 +790,7 @@
   function triggerWin(){
     running = false;
     const totalElapsed = performance.now() - roundStartTime;
-    ovMoney.textContent = '$' + Math.floor(money).toLocaleString();
+    ovBounces.textContent = bounces.toLocaleString();
     ovFirst.textContent = formatTime(firstHitElapsed);
     ovTotal.textContent = formatTime(totalElapsed);
     points += 1;
@@ -856,7 +862,6 @@
           b.x -= e.nx*penetration;
           b.y -= e.ny*penetration;
           reflectVelocity(b, e.nx, e.ny);
-          money += 1;
           bounces += 1;
         }
       } else {
@@ -867,7 +872,6 @@
           b.x = cx + nx*(R-b.r);
           b.y = cy + ny*(R-b.r);
           reflectVelocity(b, nx, ny);
-          money += 1;
           bounces += 1;
         }
       }
@@ -926,14 +930,13 @@
   }
 
   function updateHud(){
-    moneyEl.textContent = '$' + Math.floor(money).toLocaleString();
+    bounceReadoutEl.textContent = bounces.toLocaleString();
     statBalls.textContent = balls.length;
-    statBounces.textContent = bounces;
     statRun.textContent = runNumber;
-    // fill estimate: total ball area / active-shape area
-    const ballArea = balls.reduce((s,b)=> s + Math.PI*b.r*b.r, 0);
-    const shapeArea = polygonArea(currentShape());
-    const pct = Math.min(100, Math.round((ballArea/shapeArea)*100));
+    // capacity: current ball count vs. a simulation-calibrated max for this
+    // shape/ball-size, rather than raw ball-area/container-area (which caps
+    // around ~29% due to random-sequential-packing jamming, never near 100%)
+    const pct = Math.min(100, Math.round((balls.length / estimatedMaxBalls()) * 100));
     fillPct.textContent = pct + '%';
     fillBar.style.width = pct + '%';
   }
