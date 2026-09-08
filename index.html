@@ -871,7 +871,7 @@
 
   function rand(a,b){ return a + Math.random()*(b-a); }
 
-  function spawnBallAt(x, y, vAngle, opts){
+  function spawnBallAt(x, y, vAngle){
     opts = opts || {};
     const r = ballRadiusBase * vars.sizeMult;
     const speed = rand(1.6, 2.6) * vars.speedMult;
@@ -881,7 +881,7 @@
       vy: Math.sin(vAngle)*speed,
       r,
       color: PALETTE[balls.length % PALETTE.length],
-      twinOf: opts.twinOf !== undefined ? opts.twinOf : null,
+      twinOf: null,
       charge: Math.random() < 0.5 ? 1 : -1,
     });
     return balls.length - 1;
