@@ -872,7 +872,6 @@
   function rand(a,b){ return a + Math.random()*(b-a); }
 
   function spawnBallAt(x, y, vAngle){
-    opts = opts || {};
     const r = ballRadiusBase * vars.sizeMult;
     const speed = rand(1.6, 2.6) * vars.speedMult;
     balls.push({
