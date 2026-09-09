@@ -488,7 +488,7 @@
   const CONTAINER_SHAPES = [
     { sides: 0, name: 'Circle' },
     { sides: 5, name: 'Pentagon' },
-    { sides: 3, name: 'Triangle' },
+    { sides: 4, name: 'Square' },
     { sides: 7, name: 'Heptagon' },
     { sides: 3, name: 'Triangle' }
   ];
@@ -880,7 +880,6 @@
       vy: Math.sin(vAngle)*speed,
       r,
       color: PALETTE[balls.length % PALETTE.length],
-      twinOf: null,
       charge: Math.random() < 0.5 ? 1 : -1,
     });
     return balls.length - 1;
@@ -980,7 +979,7 @@
     vx *= WALL_BOUNCE_GAIN;
     vy *= WALL_BOUNCE_GAIN;
     const maxSpeed = MAX_SPEED_BASE * vars.speedMult;
-    const speed = Math.sqrt(vx*vx + vy*vy);
+    const speed = Math.sqrt(vx*vx+vy*vy);
     if(speed > maxSpeed){
       const s = maxSpeed / speed;
       vx *= s; vy *= s;
@@ -994,10 +993,9 @@
     if(rotationEnabled) containerRotation += ROTATION_SPEED;
     const wallEdges = polygonEdges(); // null when the active shape is the circle
 
-    // physics for non-twin balls
+    // physics for all balls
     for(let i=0;i<balls.length;i++){
       const b = balls[i];
-      if(b.twinOf !== null && balls[b.twinOf] && balls[b.twinOf].twinOf === i && i > b.twinOf) continue; // secondary of pair, derived below
       b.vy += vars.gravity * 0.05;
       b.vx *= (1 - vars.drag);
       b.vy *= (1 - vars.drag);
@@ -1026,18 +1024,6 @@
           reflectVelocity(b, nx, ny);
           bounces += 1;
         }
-      }
-    }
-
-    // sync entangled twins as point-reflections through center
-    for(let i=0;i<balls.length;i++){
-      const b = balls[i];
-      if(b.twinOf !== null && balls[b.twinOf] && balls[b.twinOf].twinOf === i && i > b.twinOf){
-        const primary = balls[b.twinOf];
-        b.x = 2*cx - primary.x;
-        b.y = 2*cy - primary.y;
-        b.vx = -primary.vx;
-        b.vy = -primary.vy;
       }
     }
 
@@ -1134,20 +1120,6 @@
     ctx.strokeStyle = 'rgba(255,255,255,0.14)';
     ctx.lineWidth = 2;
     ctx.stroke();
-
-    // entangle links
-    for(let i=0;i<balls.length;i++){
-      const b = balls[i];
-      if(b.twinOf !== null && b.twinOf > i){
-        const t = balls[b.twinOf];
-        ctx.beginPath();
-        ctx.moveTo(b.x,b.y);
-        ctx.lineTo(t.x,t.y);
-        ctx.strokeStyle = 'rgba(167,139,250,0.25)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-    }
 
     // balls
     const useSpeedColor = effectOn('speedColor');
