@@ -768,7 +768,7 @@
         const canUnlock = !running && points > 0;
         row.innerHTML = `
           <span class="tune-label">${def.name}</span>
-          <button class="tune-btn" data-unlock="${def.key}" style="width:auto; padding:0 10px;" ${canUnlock ? '' : 'disabled'}>Unlock — 1 pt</button>`;
+          <button class="shape-btn" data-unlock="${def.key}" style="width:auto; padding:0 10px;" ${canUnlock ? '' : 'disabled'}>Unlock — 1 pt</button>`;
       }
       rows.appendChild(row);
     });
