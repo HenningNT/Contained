@@ -517,7 +517,7 @@
       };
     } else {
       const canUnlock = !running && points > 0;
-      row.innerHTML = `<button class="tune-btn" id="rotation-unlock" style="width:auto; padding:0 10px;" ${canUnlock ? '' : 'disabled'}>Unlock Rotation — 1 pt</button>`;
+      row.innerHTML = `<button class="shape-btn" id="rotation-unlock" style="width:auto; padding:0 10px;" ${canUnlock ? '' : 'disabled'}>Unlock Rotation — 1 pt</button>`;
       document.getElementById('rotation-unlock').onclick = () => {
         if(running || points <= 0) return;
         points -= 1;
