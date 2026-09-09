@@ -1,4 +1,51 @@
-<!DOCTYPE html>
+.panel{
+  flex: 0 0 300px;
+  background: var(--panel);
+  border-left: 1px solid var(--panel-border);
+  backdrop-filter: blur(10px);
+  padding: 0;                    /* padding moves to the inner scroller */
+  display:flex;
+  flex-direction:column;
+  gap: 0;
+  /* overflow-y removed */
+  position: relative;            /* already present on mobile, make it always */
+}
+
+.panel-scroll{
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* mobile adjustments */
+@media (max-width: 760px){
+  .panel{
+    flex: 0 0 auto;
+    max-height: 42vh;
+    border-left: none;
+    border-top: 1px solid var(--panel-border);
+    padding-bottom: 34px;        /* room for the handle */
+  }
+  .panel-scroll{
+    padding-bottom: 8px;         /* a little extra so last controls aren’t hidden under the handle */
+  }
+  /* .panel-handle stays exactly as it was */
+}
+HTML<div class="panel" id="panel">
+  <div class="panel-scroll">
+    <!-- everything that was previously a direct child of .panel goes here -->
+    <div> … title / admin checkbox … </div>
+    <div> … stats / fill bar … </div>
+    <details class="tuning" open> … </details>
+    <!-- etc. -->
+  </div>
+  <div class="panel-handle" id="panel-handle"></div>
+</div>
+After the change the grey range track / thumb (and the bottom drag handle) stay locked to the panel while the tuning rows scroll underneath them.Show me the full edited file.Here’s the complete edited  with the slider / panel-handle fix applied:
+HTML<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -75,11 +122,19 @@
     background: var(--panel);
     border-left: 1px solid var(--panel-border);
     backdrop-filter: blur(10px);
-    padding: 28px 22px;
+    padding: 0;
     display:flex;
     flex-direction:column;
+    gap: 0;
+    position: relative;
+  }
+  .panel-scroll{
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 28px 22px;
+    display: flex;
+    flex-direction: column;
     gap: 22px;
-    overflow-y:auto;
   }
   .panel h1{
     font-family:'Space Grotesk', sans-serif;
@@ -319,6 +374,9 @@
       transition: max-height 0.28s cubic-bezier(.4,0,.2,1);
     }
     .panel.dragging{ transition: none; }
+    .panel-scroll{
+      padding-bottom: 8px;
+    }
     .panel-handle{
       display:flex;
       align-items:center;
@@ -368,47 +426,49 @@
   </div>
 
   <div class="panel" id="panel">
-    <div>
-      <h1>Contained</h1>
-      <div class="sub">Two balls bounce in a circle. Every collision spawns a new one. Every wall hit adds a bounce. Fill the circle to win.</div>
-      <label style="display:flex; align-items:center; gap:7px; margin-top:12px; font-size:11.5px; color:var(--text-dim); cursor:pointer;">
-        <input type="checkbox" id="admin-mode" style="accent-color:var(--coral); width:14px; height:14px;">
-        Admin mode — free, live tweaks during runs
-      </label>
+    <div class="panel-scroll">
+      <div>
+        <h1>Contained</h1>
+        <div class="sub">Two balls bounce in a circle. Every collision spawns a new one. Every wall hit adds a bounce. Fill the circle to win.</div>
+        <label style="display:flex; align-items:center; gap:7px; margin-top:12px; font-size:11.5px; color:var(--text-dim); cursor:pointer;">
+          <input type="checkbox" id="admin-mode" style="accent-color:var(--coral); width:14px; height:14px;">
+          Admin mode — free, live tweaks during runs
+        </label>
+      </div>
+
+      <div>
+        <div class="stat-row"><span>Balls</span><span id="stat-balls">2</span></div>
+        <div class="stat-row"><span>Run</span><span id="stat-run">1</span></div>
+        <div class="fill-note">Container capacity <span id="fill-pct">0%</span></div>
+        <div class="fill-bar-track"><div class="fill-bar" id="fill-bar"></div></div>
+      </div>
+
+      <details class="tuning" open>
+        <summary>TUNING — <span id="points-readout">0</span> pt<span id="points-plural">s</span> to spend</summary>
+        <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Each step costs 1 point. Only spendable between rounds — win a round to earn one.</p>
+        <div id="tuning-rows"></div>
+        <button class="reset-btn" id="reset-tuning">Reset to defaults</button>
+      </details>
+
+      <details class="tuning" open>
+        <summary>CONTAINER SHAPE</summary>
+        <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock the next shape for 1 point. Switching between unlocked shapes is free, but only between rounds.</p>
+        <div id="shape-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+        <div id="rotation-row" style="margin-top:12px;"></div>
+      </details>
+
+      <details class="tuning" open>
+        <summary>CHARGE</summary>
+        <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Same-colour balls repel, opposite colours attract. A collision flips one ball's charge so they repel afterward. The range stays local even at High.</p>
+        <div id="charge-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+      </details>
+
+      <details class="tuning" open>
+        <summary>EFFECTS</summary>
+        <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock a visual effect for 1 point, then flip it on or off anytime.</p>
+        <div id="effect-rows"></div>
+      </details>
     </div>
-
-    <div>
-      <div class="stat-row"><span>Balls</span><span id="stat-balls">2</span></div>
-      <div class="stat-row"><span>Run</span><span id="stat-run">1</span></div>
-      <div class="fill-note">Container capacity <span id="fill-pct">0%</span></div>
-      <div class="fill-bar-track"><div class="fill-bar" id="fill-bar"></div></div>
-    </div>
-
-    <details class="tuning" open>
-      <summary>TUNING — <span id="points-readout">0</span> pt<span id="points-plural">s</span> to spend</summary>
-      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Each step costs 1 point. Only spendable between rounds — win a round to earn one.</p>
-      <div id="tuning-rows"></div>
-      <button class="reset-btn" id="reset-tuning">Reset to defaults</button>
-    </details>
-
-    <details class="tuning" open>
-      <summary>CONTAINER SHAPE</summary>
-      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock the next shape for 1 point. Switching between unlocked shapes is free, but only between rounds.</p>
-      <div id="shape-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-      <div id="rotation-row" style="margin-top:12px;"></div>
-    </details>
-
-    <details class="tuning" open>
-      <summary>CHARGE</summary>
-      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Same-colour balls repel, opposite colours attract. A collision flips one ball's charge so they repel afterward. The range stays local even at High.</p>
-      <div id="charge-rows" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-    </details>
-
-    <details class="tuning" open>
-      <summary>EFFECTS</summary>
-      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock a visual effect for 1 point, then flip it on or off anytime.</p>
-      <div id="effect-rows"></div>
-    </details>
 
     <div class="panel-handle" id="panel-handle"></div>
   </div>
