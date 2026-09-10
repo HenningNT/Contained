@@ -398,6 +398,12 @@
       <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Unlock a visual effect for 1 point, then flip it on or off anytime.</p>
       <div id="effect-rows"></div>
     </details>
+
+    <details class="tuning" open>
+      <summary>ABILITIES</summary>
+      <p class="sub" style="margin:10px 0 12px; font-size:11.5px;">Thanos snaps away half the balls in the container. 20s cooldown after use. Costs 6 points to unlock.</p>
+      <div id="thanos-row"></div>
+    </details>
     
     <details class="tuning" open>
       <summary>CONTAINER SHAPE</summary>
@@ -516,6 +522,8 @@
         renderTuning();
       };
     });
+    // keep Thanos unlock button in sync with current points
+    if(typeof renderThanos === 'function') renderThanos();
   }
 
   const PALETTE = ['#5EEAD4', '#FB7185', '#A78BFA', '#FBBF24', '#60A5FA', '#F472B6'];
@@ -729,6 +737,97 @@
   function effectOn(key){
     const def = EFFECT_DEFS.find(d => d.key === key);
     return def.enabled && (def.unlocked || adminMode);
+  }
+
+  // ---------- Thanos ability ----------
+  let thanosUnlocked = false;
+  let thanosReadyAt = 0; // performance.now() timestamp when the ability is ready again
+  const THANOS_COST = 6;
+  const THANOS_COOLDOWN_MS = 20000;
+
+  function canUseThanos(){
+    return (thanosUnlocked || adminMode) &&
+           running &&
+           balls.length >= 2 &&
+           performance.now() >= thanosReadyAt;
+  }
+
+  function triggerThanos(){
+    if(!canUseThanos()) return;
+    const n = balls.length;
+    const toRemove = Math.floor(n / 2);
+    if(toRemove < 1) return;
+
+    // random half: shuffle indices, keep the first (n - toRemove)
+    const indices = balls.map((_, i) => i);
+    for(let i = indices.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+    }
+    const keep = [];
+    for(let i = 0; i < n - toRemove; i++) keep.push(balls[indices[i]]);
+
+    // optional visual: explode the ones being removed
+    for(let i = n - toRemove; i < n; i++){
+      const b = balls[indices[i]];
+      spawnExplosion(b.x, b.y, identityColor(b), identityColor(b));
+    }
+
+    balls = keep;
+    thanosReadyAt = performance.now() + THANOS_COOLDOWN_MS;
+    updateHud();
+    renderThanos();
+  }
+
+  function renderThanos(){
+    const row = document.getElementById('thanos-row');
+    if(!row) return;
+    const available = thanosUnlocked || adminMode;
+    if(!available){
+      const canUnlock = !running && points >= THANOS_COST;
+      row.innerHTML = `<button class="shape-btn" id="thanos-unlock" style="width:100%;" ${canUnlock ? '' : 'disabled'}>Unlock Thanos — ${THANOS_COST} pts</button>`;
+      const btn = document.getElementById('thanos-unlock');
+      if(btn){
+        btn.onclick = () => {
+          if(running || points < THANOS_COST) return;
+          points -= THANOS_COST;
+          thanosUnlocked = true;
+          renderThanos();
+          renderTuning();
+        };
+      }
+    } else {
+      const now = performance.now();
+      const remaining = Math.max(0, thanosReadyAt - now);
+      const ready = remaining <= 0;
+      const canSnap = ready && running && balls.length >= 2;
+      let label = 'Snap!';
+      if(!ready) label = `Cooldown ${Math.ceil(remaining / 1000)}s`;
+      else if(!running) label = 'Snap! (during a run)';
+      else if(balls.length < 2) label = 'Snap! (need ≥2 balls)';
+      row.innerHTML = `<button class="shape-btn" id="thanos-btn" style="width:100%;" ${canSnap ? '' : 'disabled'}>${label}</button>`;
+      const btn = document.getElementById('thanos-btn');
+      if(btn){
+        btn.onclick = () => triggerThanos();
+      }
+    }
+  }
+
+  // lightweight live cooldown text update (avoids full re-render every frame)
+  function updateThanosUI(){
+    if(!(thanosUnlocked || adminMode)) return;
+    const btn = document.getElementById('thanos-btn');
+    if(!btn) return;
+    const now = performance.now();
+    const remaining = Math.max(0, thanosReadyAt - now);
+    const ready = remaining <= 0;
+    const canSnap = ready && running && balls.length >= 2;
+    let label = 'Snap!';
+    if(!ready) label = `Cooldown ${Math.ceil(remaining / 1000)}s`;
+    else if(!running) label = 'Snap! (during a run)';
+    else if(balls.length < 2) label = 'Snap! (need ≥2 balls)';
+    if(btn.textContent !== label) btn.textContent = label;
+    btn.disabled = !canSnap;
   }
 
   // ---------- proximity hum (Web Audio) ----------
@@ -978,6 +1077,7 @@
     renderCharge();
     renderRotation();
     renderEffects();
+    renderThanos();
   }
 
   function formatTime(ms){
@@ -999,6 +1099,7 @@
     renderCharge();
     renderRotation();
     renderEffects();
+    renderThanos();
   }
 
   let WALL_BOUNCE_GAIN = 1.6; // walls add a bit of energy so balls don't pool at the bottom under gravity
@@ -1189,6 +1290,7 @@
   function loop(){
     step();
     draw();
+    updateThanosUI();
     requestAnimationFrame(loop);
   }
 
@@ -1214,6 +1316,7 @@
     renderCharge();
     renderRotation();
     renderEffects();
+    renderThanos();
   };
 
   // ---------- portrait: slidable panel ----------
