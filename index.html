@@ -42,6 +42,7 @@
     align-items:center;
     justify-content:center;
     position:relative;
+    z-index: 1;
     min-width:0;
   }
   canvas{
@@ -79,6 +80,8 @@
     display:flex;
     flex-direction:column;
     overflow: hidden;
+    position: relative;
+    z-index: 2;
   }
   .panel-scroll{
     flex: 1 1 auto;
@@ -346,7 +349,7 @@
       opacity:0.55;
     }
     .panel-handle:active{ cursor:grabbing; }
-    .stage{ flex: 1 1 auto; }
+    .stage{ flex: 1 1 auto; min-height: 0; overflow: hidden; }
   }
 </style>
 </head>
@@ -1307,7 +1310,7 @@
   // you tuck it away to watch the circle fill, or pull it up to tune.
   const panelEl = document.getElementById('panel');
   const panelHandle = document.getElementById('panel-handle');
-  const PANEL_PEEK = 64; // px — collapsed height, just the handle + title peeking out
+  const PANEL_PEEK = 88; // px — collapsed height, just the handle + title peeking out (must clear panel-scroll's 56px vertical padding floor + the 28px handle, or the handle gets clipped)
   const isPortrait = () => window.matchMedia('(max-width: 760px)').matches;
   const maxPanelHeight = () => Math.round(window.innerHeight * 0.82);
 
