@@ -116,14 +116,6 @@
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
-  .section-title{
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--text-dim);
-    border-top: 1px solid var(--panel-border);
-    padding-top: 16px;
-    margin-top: -4px;
-  }
   details.tuning{
     border-top: 1px solid var(--panel-border);
     padding-top: 16px;
@@ -142,24 +134,6 @@
   }
   details.tuning[open] summary::before{
     content: '▾ ';
-  }
-  .slider-row{
-    margin-top: 14px;
-  }
-  .slider-row .slider-label{
-    display:flex;
-    justify-content:space-between;
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-bottom: 5px;
-  }
-  .slider-row .slider-label span:last-child{
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-  .slider-row input[type="range"]{
-    width: 100%;
-    accent-color: var(--teal);
   }
   .tune-row{
     margin-top: 14px;
@@ -615,7 +589,7 @@
   // simulation using this exact spawn algorithm (SPAWN_MAX_TRIES, +3 margin,
   // ball radius 5) — rescaled so Circle matches an observed real value.
   const BASE_R = 5;
-  const BASE_MAX_BALLS = { 0: 940, 3: 363, 4: 589, 5: 710, 6: 773, 7: 824, 8: 851 };
+  const BASE_MAX_BALLS = { 0: 940, 3: 363, 4: 589, 5: 710, 7: 824 };
 
   function estimatedMaxBalls(){
     const shape = currentShape();
@@ -1364,7 +1338,6 @@
   panelHandle.addEventListener('pointercancel', onPanelDragEnd);
 
   window.addEventListener('resize', () => {
-    resizeCanvas(); // only updates pixel size / renderScale — logical R and ball sizes never change
     if(isPortrait()){
       // keep whatever inline height was set (if any) within the new bounds
       if(panelEl.style.maxHeight){
@@ -1373,7 +1346,7 @@
     } else {
       panelEl.style.maxHeight = ''; // let the desktop CSS take over
     }
-    resizeCanvas();
+    resizeCanvas(); // after any panel-height adjustment above, so it sees the final stage size
   });
 
   // ---------- Konami code easter egg ----------
